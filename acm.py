@@ -1,177 +1,150 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import prince
 import numpy as np
+import prince
+from scipy.stats import chi2_contingency
 
-# netoyage des données
+# Chargement et nettoyage des données
 credit = pd.read_csv("credit.csv", sep=";")
-# Affichage des premières lignes
-print("\tAperçus du jour\n")
+print("\nAperçu des données :")
 print(credit.head())
 
-
-#type de données
-print("\n\tTypes de données\n")
+# Types de données
+print("\nTypes de données :")
 print(credit.dtypes)
-# Analyse des valeurs manquantes
-credit.isnull().sum()
-# Description de la base de données
-print("\t\n Description de la base de données\n")
-credit.describe(include='all')
-# Analyse des doublons
-# Vérification des doublons
+
+# Valeurs manquantes
+print("\nValeurs manquantes :")
+print(credit.isnull().sum())
+
+# Doublons
 duplicates = credit.duplicated().sum()
-print("\n\tNombre de ligne dupliquée est : ", duplicates)
-# La variable age est de type quantitative
-# Transformation de la variable catégorielles age en qualitative
+print("\nNombre de lignes dupliquées :", duplicates)
 
-# Definir les bornes pour les classes d'âge
+# Transformation de l'âge en classe
 bins = [19, 29, 39, 49, 59, 69, 79, 100]
-# Definir les étiquettes pour les classes d'âge
 labels = ['20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80+']
-# Créer une nouvelle colonne 'age_group' avec les classes d'âge
 credit['ages_group'] = pd.cut(credit['Age'], bins=bins, labels=labels, right=False)
-# Afficher les premières lignes pour vérifier la nouvelle colonne
-print("\n\tAperçus du jour avec la nouvelle colonne 'ages_group'\n")
-print(credit.head())
-# Affichage des variables catégorielles
-# Liste des variables catégorielles
+print("\nDonnées avec 'ages_group' :")
+print(credit[['Age', 'ages_group']].head())
+
+# Variables catégorielles
 categorical_columns = ['Marche', 'Apport', 'Impaye', 'Assurance', 'Endettement', 'Famille', 'Enfants', 'Logement', 'Profession', 'Intitule']
 
-# Création des graphiques pour chaque variable catégorielle en terme de proportion
-for column in categorical_columns:
+# Diagrammes en barres (proportions)
+for col in categorical_columns:
     plt.figure(figsize=(10, 5))
-    proportions = credit[column].value_counts(normalize=True) * 100
+    proportions = credit[col].value_counts(normalize=True) * 100
     sns.barplot(x=proportions.index, y=proportions.values)
-    plt.title(f"Diagramme en barres pour la variable {column} (proportions)")
-    plt.ylabel('Proportion (%)')
+    plt.title(f"Proportions pour la variable {col}")
+    plt.ylabel("Proportion (%)")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
     plt.show()
-    # Liste des variables catégorielles
-categorical_columsns = ['Marche', 'Apport', 'Impaye', 'Assurance', 'Endettement', 'Famille', 'Enfants', 'Logement', 'Profession', 'Intitule']
-for columns in categorical_columns:
-    print(f"\nFréquences de la variable {columns}:")
-    print(credit[columns].value_counts())
-    # Créer des graphiques pour les variables catégorielles
-for columns in categorical_columns:
-    plt.figure(figsize=(10, 5))
-    sns.countplot(x=columns, data=credit)
-    plt.title(f"Diagramme en barres pour la variable {columns}")
-    plt.show()
-    # Créer des graphiques camemberts pour les variables catégorielles
-for columns in categorical_columns:
-    plt.figure(figsize=(10, 6))
-    credit[columns].value_counts().plot.pie(autopct='%1.1f%%', startangle=90)
-    plt.title(f"Diagramme camembert pour la variable : {columns}")
-    plt.ylabel('')
-    plt.show()
-    # Liste des variables qualitatives
-categorical_columns = ['Marche', 'Apport', 'Impaye', 'Assurance', 'Endettement', 'Famille', 'Enfants', 'Logement', 'Profession', 'Intitule']
-# Créer des graphiques bivariés pour chaque paire de variables qualitatives
-for col1 in categorical_columns:
-    for col2 in categorical_columns:
-        if col1 != col2:
-            # Calculer les proportions pour le graphique bivarié
-            proportions = credit.groupby([col1, col2]).size().reset_index(name='Count')
-            proportions['Proportion'] = proportions['Count'] / proportions.groupby(col1)['Count'].transform('sum') * 100
 
-            # Créer un graphique en barres empilées pour la paire de variables
+# Fréquences simples
+for col in categorical_columns:
+    print(f"\nFréquences de {col} :")
+    print(credit[col].value_counts())
+
+# Diagrammes camembert
+for col in categorical_columns:
+    plt.figure(figsize=(8, 6))
+    credit[col].value_counts().plot.pie(autopct='%1.1f%%', startangle=90)
+    plt.title(f"Répartition de {col}")
+    plt.ylabel("")
+    plt.tight_layout()
+    plt.show()
+
+# Graphiques bivariés
+for i, col1 in enumerate(categorical_columns):
+    for j, col2 in enumerate(categorical_columns):
+        if i < j:  # éviter les doublons
+            grouped = credit.groupby([col1, col2]).size().reset_index(name='Count')
+            grouped['Proportion'] = grouped['Count'] / grouped.groupby(col1)['Count'].transform('sum') * 100
             plt.figure(figsize=(10, 5))
-            sns.barplot(x=col1, y='Proportion', hue=col2, data=proportions)
-            plt.title(f"Graphique bivarié entre {col1} et {col2} (proportions)")
-            plt.ylabel('Proportion (%)')
+            sns.barplot(x=col1, y='Proportion', hue=col2, data=grouped)
+            plt.title(f"Relation entre {col1} et {col2}")
+            plt.ylabel("Proportion (%)")
+            plt.xticks(rotation=45)
+            plt.tight_layout()
             plt.show()
-            
-            # Initialiser les DataFrame pour les coefficients de Cramér et les p-values
+
+# Matrices pour les coefficients d'association
 cramer_v_df = pd.DataFrame(index=categorical_columns, columns=categorical_columns)
-p_value_df = pd.DataFrame(index=categorical_columns, columns=categorical_columns)
 tschuprow_t_df = pd.DataFrame(index=categorical_columns, columns=categorical_columns)
+p_value_df = pd.DataFrame(index=categorical_columns, columns=categorical_columns)
 
-# Calculer le test de chi-deux pour chaque paire de variables qualitatives
-for i, column1 in enumerate(categorical_columns):
-    for j, column2 in enumerate(categorical_columns):
-        if column1 != column2:
-            contingency_table = pd.crosstab(credit[column1], credit[column2])
-            chi2, p, dof, expected = chi2_contingency(contingency_table)
-            cramer_v = np.sqrt(chi2 / (credit.shape[0] * (min(contingency_table.shape) - 1)))
-            tschuprow_t = cramer_v * np.sqrt((contingency_table.shape[0] - 1) * (contingency_table.shape[1] - 1) / (credit.shape[0] - 1))
-            cramer_v_df.loc[column1, column2] = cramer_v
-            tschuprow_t_df.loc[column1, column2] = tschuprow_t
-            p_value_df.loc[column1, column2] = p
+for i in categorical_columns:
+    for j in categorical_columns:
+        if i != j:
+            table = pd.crosstab(credit[i], credit[j])
+            chi2, p, dof, expected = chi2_contingency(table)
+            n = credit.shape[0]
+            cramer_v = np.sqrt(chi2 / (n * (min(table.shape)-1)))
+            tschuprow_t = cramer_v * np.sqrt((table.shape[0] - 1) * (table.shape[1] - 1) / (n - 1))
+            cramer_v_df.loc[i, j] = round(cramer_v, 3)
+            tschuprow_t_df.loc[i, j] = round(tschuprow_t, 3)
+            p_value_df.loc[i, j] = round(p, 4)
 
-# Afficher la DataFrame des p-values
-print("\nDataFrame des p-values :")
-p_value_df.style.set_properties(**{'border-color': 'black', 'border-width': '2px', 'border-style': 'solid'})
+print("\nP-values :")
+print(p_value_df)
+print("\nCramér's V :")
+print(cramer_v_df)
+print("\nTschuprow's T :")
+print(tschuprow_t_df)
 
-# Afficher la DataFrame des coefficients de Cramér
-print("DataFrame des coefficients de Cramér :")
-cramer_v_df.style.background_gradient(cmap='Greens', high=0.4, low=0).set_properties(**{'border-color': 'black', 'border-width': '1px', 'border-style': 'solid'})
-# Afficher la DataFrame des coefficients de Tchuprow
-print("\nDataFrame des coefficients de Tchuprow :")
-tschuprow_t_df.style.background_gradient(cmap='Greens', high=0.4, low=0).set_properties(**{'border-color': 'black', 'border-width': '1px', 'border-style': 'solid'})
+# Analyse des correspondances multiples (ACM)
+# Création du tableau disjonctif
+tableau_disjonctif = pd.get_dummies(credit[categorical_columns], drop_first=False)
 
-#  Créer et ajuster l'ACM
-acm = prince.MCA(
-    n_components=2,
-    n_iter=10,
-    copy=True,
-    check_input=True,
-    engine='sklearn', 
-    random_state=42
-)
+# Ajustement de l'ACM
+acm = prince.MCA(n_components=2, n_iter=10, copy=True, engine='sklearn', random_state=42)
 acm = acm.fit(tableau_disjonctif)
 
-#  Affichage des coordonnées des colonnes (modalités)
-print("\n\tCoordonnées des colonnes (modalités)\n")
+# Coordonnées colonnes (modalités)
 coords_col = acm.column_coordinates(tableau_disjonctif)
+print("\nCoordonnées des modalités :")
 print(coords_col)
 
-#  Affichage des coordonnées des lignes (individus)
-print("\n\tCoordonnées des lignes (individus)\n")
+# Coordonnées lignes (individus)
 coords_row = acm.row_coordinates(tableau_disjonctif)
+print("\nCoordonnées des individus :")
 print(coords_row)
 
-#  Visualisation des modalités
-fig, ax = plt.subplots(figsize=(10, 8))
-ax.set_title("Nuage des modalités - ACM")
+# Graphique modalités
+plt.figure(figsize=(10, 8))
+plt.title("Nuage des modalités - ACM")
+plt.scatter(coords_col[0], coords_col[1], c='blue')
 for i, label in enumerate(coords_col.index):
-    x, y = coords_col.iloc[i, 0], coords_col.iloc[i, 1]
-    ax.scatter(x, y, color='blue')
-    ax.text(x, y, label, fontsize=9)
-ax.axhline(0, color='gray', linestyle='--')
-ax.axvline(0, color='gray', linestyle='--')
+    plt.text(coords_col.iloc[i, 0], coords_col.iloc[i, 1], str(label), fontsize=8)
+plt.axhline(0, color='gray', linestyle='--')
+plt.axvline(0, color='gray', linestyle='--')
 plt.xlabel("Axe 1")
 plt.ylabel("Axe 2")
 plt.grid(True)
 plt.show()
 
-# Visualisation des profils lignes (individus)
-fig, ax = plt.subplots(figsize=(10, 8))
-ax.set_title("Graphique - Profils lignes")
-
-for i, label in enumerate(coords_row.index):
-    x, y = coords_row.iloc[i, 0], coords_row.iloc[i, 1]
-    ax.scatter(x, y, color='orange', s=10)
-    ax.text(x, y, str(label), fontsize=7) 
-
-ax.axhline(0, color='gray', linestyle='--')
-ax.axvline(0, color='gray', linestyle='--')
+# Graphique individus
+plt.figure(figsize=(10, 8))
+plt.title("Profils lignes - ACM")
+plt.scatter(coords_row[0], coords_row[1], c='orange', s=10)
+plt.axhline(0, color='gray', linestyle='--')
+plt.axvline(0, color='gray', linestyle='--')
 plt.xlabel("Axe 1")
 plt.ylabel("Axe 2")
 plt.grid(True)
 plt.show()
 
-# Visualisation des profils colonnes (modalités)
-fig, ax = plt.subplots(figsize=(10, 8))
-ax.set_title("Graphique - Profils colonnes")
-
+# Graphique modalités (profils colonnes)
+plt.figure(figsize=(10, 8))
+plt.title("Profils colonnes - ACM")
+plt.scatter(coords_col[0], coords_col[1], c='red', s=10)
 for i, label in enumerate(coords_col.index):
-    x, y = coords_col.iloc[i, 0], coords_col.iloc[i, 1]
-    ax.scatter(x, y, color='red', s=10)
-    ax.text(x, y, str(label), fontsize=7) 
-
-ax.axhline(0, color='gray', linestyle='--')
-ax.axvline(0, color='gray', linestyle='--')
+    plt.text(coords_col.iloc[i, 0], coords_col.iloc[i, 1], str(label), fontsize=7)
+plt.axhline(0, color='gray', linestyle='--')
+plt.axvline(0, color='gray', linestyle='--')
 plt.xlabel("Axe 1")
 plt.ylabel("Axe 2")
 plt.grid(True)
